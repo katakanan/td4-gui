@@ -1,6 +1,6 @@
 use iced::{
-    button, executor, time, Align, Application, Button, Clipboard, Column, Command, Container,
-    Element, Length, Row, Subscription, Text,
+    button, executor, slider, time, Align, Application, Button, Clipboard, Column, Command,
+    Container, Element, Length, Row, Slider, Subscription, Text,
 };
 
 use super::bitbutton;
@@ -31,6 +31,8 @@ pub struct TD4 {
     output_state: bitbutton::InputHalfByte,
     rom_state: bitbutton::RomTable,
     hoge: bool,
+    slider: slider::State,
+    period: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -41,6 +43,7 @@ pub enum Message {
     Stop,
     RomEdit(usize, u8, bool),
     InputEdit(u8, bool),
+    SliderChanged(f64),
 }
 
 impl TD4 {
@@ -66,7 +69,7 @@ impl Application for TD4 {
         let cpu = Emulator::new("prg.bin");
         let mut td4 = TD4::default();
         td4.cpu = cpu;
-
+        td4.period = 1000;
         (td4, Command::none())
     }
 
@@ -109,6 +112,9 @@ impl Application for TD4 {
             Message::Stop => {
                 self.state = State::Idle;
             }
+            Message::SliderChanged(value) => {
+                self.period = value as u64;
+            }
         }
 
         Command::none()
@@ -118,7 +124,7 @@ impl Application for TD4 {
         match self.state {
             State::Idle => Subscription::none(),
             State::Active => {
-                time::every(std::time::Duration::from_millis(1000)).map(|_| Message::Tick)
+                time::every(std::time::Duration::from_millis(self.period)).map(|_| Message::Tick)
             }
         }
     }
@@ -140,20 +146,42 @@ impl Application for TD4 {
             .style(self.theme);
 
         let controls = Row::new().spacing(5).push(run).push(stop).push(step);
+        let slider = Slider::new(
+            &mut self.slider,
+            100.0..=1000.0,
+            self.period as f64,
+            Message::SliderChanged,
+        );
 
         let input = self.input_state.crate_layout(&self.cpu.port.input);
         // println!("{}", self.cpu.prg.mem.len()); //16
 
-        let rom = self.rom_state.create_layout(&self.cpu.prg);
-        let col = rom
-            .into_iter()
-            .fold(Column::new().spacing(5), |col, btn| col.push(btn));
-
-        let content = Column::new()
+        let io = Column::new()
             .spacing(20)
-            .push(col)
+            .max_width(400)
             .push(input)
+            .push(slider)
             .push(controls)
+            .align_items(Align::Center);
+
+        let rom = self.rom_state.create_layout(&self.cpu.prg);
+        let rom_control =
+            rom.into_iter()
+                .enumerate()
+                .fold(Column::new().spacing(5), |col, (i, btn)| {
+                    col.push(
+                        Row::new()
+                            .spacing(10)
+                            .push(Text::new(format!("{}:", i)))
+                            .push(btn),
+                    )
+                    .align_items(Align::End)
+                });
+
+        let content = Row::new()
+            .spacing(20)
+            .push(io)
+            .push(rom_control)
             .align_items(Align::Center);
 
         Container::new(content)

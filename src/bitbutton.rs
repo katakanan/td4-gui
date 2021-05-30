@@ -3,7 +3,7 @@ use iced::{button, Button, Row, Text};
 use super::style;
 use super::td4_gui::Message;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct InputHalfByte {
     pub bit_state: [button::State; 4],
 }
