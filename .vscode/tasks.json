@@ -3,15 +3,29 @@
 	"tasks": [
 		{
 			"type": "cargo",
-			"subcommand": "run",
+			"subcommand": "build",
 			"problemMatcher": [
 				"$rustc"
 			],
-			"label": "Rust: cargo run - td4-emu",
+			"label": "Rust: cargo build - td4-emu",
+			"group": "build"
+		},
+		{
+			"type": "shell",
+			"command": "wincargo",
+			"args": [
+				"run",
+				"--target",
+				"x86_64-pc-windows-msvc"
+			],
+			"label": "Rust: wincargo run - td4-emu",
 			"group": {
 				"kind": "build",
 				"isDefault": true
-			}
+			},
+			"problemMatcher": [
+				"$rustc"
+			]
 		}
 	]
 }

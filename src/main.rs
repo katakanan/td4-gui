@@ -1,6 +1,8 @@
 extern crate iced;
 extern crate td4_emu;
 
+// mod square;
+mod style;
 mod td4_gui;
 
 use crate::iced::Application;
