@@ -1,7 +1,7 @@
 extern crate iced;
 extern crate td4_emu;
 
-// mod square;
+mod bitbutton;
 mod style;
 mod td4_gui;
 

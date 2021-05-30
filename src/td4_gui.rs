@@ -1,8 +1,9 @@
 use iced::{
-    button, executor, time, Align, Application, Button, Checkbox, Clipboard, Column, Command,
-    Container, Element, HorizontalAlignment, Length, Row, Subscription, Text,
+    button, executor, time, Align, Application, Button, Clipboard, Column, Command, Container,
+    Element, Length, Row, Subscription, Text,
 };
 
+use super::bitbutton;
 use super::style;
 use td4_emu::emulator::Emulator;
 
@@ -26,7 +27,9 @@ pub struct TD4 {
     run: button::State,
     stop: button::State,
     step: button::State,
-    input_state: [button::State; 4],
+    input_state: bitbutton::InputHalfByte,
+    output_state: bitbutton::InputHalfByte,
+    rom_state: bitbutton::RomTable,
     hoge: bool,
 }
 
@@ -88,20 +91,24 @@ impl Application for TD4 {
                 }
             }
             Message::InputEdit(bit, now) => {
-                println!("{}", bit);
                 self.cpu.port.input =
                     (self.cpu.port.input & !(0x01 << bit)) | ((!now as u8) << bit);
                 println!("0b{:04b}", self.cpu.port.input);
             }
             Message::RomEdit(addr, bit, now) => {
-                self.cpu.port.input =
-                    (self.cpu.port.input & !(0x01 << bit)) | ((!now as u8) << bit);
-                println!("Rom[{}] =  0b{:04b}", addr, self.cpu.prg.mem[addr]);
+                let newbyte = (self.cpu.prg.mem[addr] & !(0x01 << bit)) | ((!now as u8) << bit);
+                println!(
+                    "Rom[{:2}] = 0b{hi:04b}_{lo:04b}",
+                    addr,
+                    hi = ((newbyte & 0xF0) >> 4),
+                    lo = (newbyte & 0x0F)
+                );
+
+                self.cpu.prg.mem[addr] = newbyte;
             }
             Message::Stop => {
                 self.state = State::Idle;
             }
-            _ => {}
         }
 
         Command::none()
@@ -132,28 +139,19 @@ impl Application for TD4 {
             .on_press(Message::Stop)
             .style(self.theme);
 
-        let inputreg = self.cpu.port.input;
-        let inputbtns: Vec<Button<Message>> = self
-            .input_state
-            .iter_mut()
-            .enumerate()
-            .map(|(i, state)| {
-                let bit = inputreg & (0x01 << i) != 0;
-                let btn =
-                    Button::new(state, bit2text(bit)).on_press(Message::InputEdit(i as u8, bit));
-                btn
-            })
-            .rev()
-            .collect::<_>();
-
-        let input = inputbtns
-            .into_iter()
-            .fold(Row::new().spacing(1), |row, btn| row.push(btn));
-
         let controls = Row::new().spacing(5).push(run).push(stop).push(step);
+
+        let input = self.input_state.crate_layout(&self.cpu.port.input);
+        // println!("{}", self.cpu.prg.mem.len()); //16
+
+        let rom = self.rom_state.create_layout(&self.cpu.prg);
+        let col = rom
+            .into_iter()
+            .fold(Column::new().spacing(5), |col, btn| col.push(btn));
 
         let content = Column::new()
             .spacing(20)
+            .push(col)
             .push(input)
             .push(controls)
             .align_items(Align::Center);
@@ -164,13 +162,5 @@ impl Application for TD4 {
             .center_x()
             .center_y()
             .into()
-    }
-}
-
-pub fn bit2text(bit: bool) -> Text {
-    if bit {
-        Text::new("1")
-    } else {
-        Text::new("0")
     }
 }
