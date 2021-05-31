@@ -11,3 +11,5 @@ edition = "2018"
 td4-emu = {git = "https://github.com/katakanan/td4-emu"}
 
 iced ={version= "0.3.0", features = ["smol"]}
+iced_native = "0.4.0"
+iced_graphics ="0.2.0"

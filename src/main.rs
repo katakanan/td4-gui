@@ -2,10 +2,11 @@ extern crate iced;
 extern crate td4_emu;
 
 mod bitbutton;
+mod circle;
 mod style;
 mod td4_gui;
 
-use crate::iced::Application;
+use crate::iced::{Application, Settings};
 
 fn main() -> iced::Result {
     println!("Hello, world!");
@@ -20,5 +21,17 @@ fn main() -> iced::Result {
     //     emu.reg.pc = next_pc;
     //     println!("{:?}", emu);
     // }
-    td4_gui::TD4::run(iced::Settings::default())
+
+    let window = iced::window::Settings {
+        size: (700, 600),
+        resizable: false,
+        ..iced::window::Settings::default()
+    };
+
+    let setting = iced::settings::Settings {
+        window,
+        ..Settings::default()
+    };
+
+    td4_gui::TD4::run(setting)
 }

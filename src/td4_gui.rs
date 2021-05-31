@@ -1,9 +1,10 @@
 use iced::{
-    button, executor, slider, time, Align, Application, Button, Clipboard, Column, Command,
+    button, executor, slider, time, Align, Application, Button, Clipboard, Color, Column, Command,
     Container, Element, Length, Row, Slider, Subscription, Text,
 };
 
 use super::bitbutton;
+use super::circle;
 use super::style;
 use td4_emu::emulator::Emulator;
 
@@ -27,6 +28,7 @@ pub struct TD4 {
     run: button::State,
     stop: button::State,
     step: button::State,
+    reset: button::State,
     input_state: bitbutton::InputHalfByte,
     output_state: bitbutton::InputHalfByte,
     rom_state: bitbutton::RomTable,
@@ -37,6 +39,7 @@ pub struct TD4 {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
+    Reset,
     Tick,
     Run,
     Step,
@@ -66,10 +69,12 @@ impl Application for TD4 {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        let cpu = Emulator::new("prg.bin");
-        let mut td4 = TD4::default();
-        td4.cpu = cpu;
-        td4.period = 1000;
+        let td4 = TD4 {
+            cpu: Emulator::new("prg.bin"),
+            period: 300,
+            ..TD4::default()
+        };
+
         (td4, Command::none())
     }
 
@@ -79,6 +84,10 @@ impl Application for TD4 {
 
     fn update(&mut self, message: Message, _clipboard: &mut Clipboard) -> Command<Message> {
         match message {
+            Message::Reset => {
+                self.cpu.reg = td4_emu::reg::Reg::default();
+                self.cpu.port = td4_emu::port::Port::default();
+            }
             Message::Tick => {
                 self.step();
                 self.show();
@@ -96,7 +105,7 @@ impl Application for TD4 {
             Message::InputEdit(bit, now) => {
                 self.cpu.port.input =
                     (self.cpu.port.input & !(0x01 << bit)) | ((!now as u8) << bit);
-                println!("0b{:04b}", self.cpu.port.input);
+                println!("Input = 0b{:04b}", self.cpu.port.input);
             }
             Message::RomEdit(addr, bit, now) => {
                 let newbyte = (self.cpu.prg.mem[addr] & !(0x01 << bit)) | ((!now as u8) << bit);
@@ -145,6 +154,12 @@ impl Application for TD4 {
             .on_press(Message::Stop)
             .style(self.theme);
 
+        let reset = Button::new(&mut self.reset, Text::new("Reset"))
+            .width(Length::from(300))
+            .padding(10)
+            .on_press(Message::Reset)
+            .style(self.theme);
+
         let controls = Row::new().spacing(5).push(run).push(stop).push(step);
         let slider = Slider::new(
             &mut self.slider,
@@ -154,17 +169,45 @@ impl Application for TD4 {
         );
 
         let input = self.input_state.crate_layout(&self.cpu.port.input);
-        // println!("{}", self.cpu.prg.mem.len()); //16
+        let input_info = Row::new()
+            .spacing(20)
+            .push(Text::new("Input Port").width(Length::from(200)))
+            .push(input)
+            .push(Text::new(format!("0x{:1X}", &self.cpu.port.input)).width(Length::from(100)))
+            .align_items(Align::End);
+
+        let output_info = reg_info(&self.cpu.port.output, "Output Port".to_string());
+
+        let rega_info = reg_info(&self.cpu.reg.a, "Register A".to_string());
+
+        let regb_info = reg_info(&self.cpu.reg.b, "Register B".to_string());
+
+        let pc_info = reg_info(&self.cpu.reg.pc, "Program Counter".to_string());
+
+        let carry = circle::Circle::new(10.0, bit2color(&self.cpu.reg.flag));
+        let carry_info = Row::new()
+            .spacing(20)
+            .push(Text::new("Carry Flag").width(Length::from(200)))
+            .push(carry)
+            .push(Text::new(format!("{}", &self.cpu.reg.flag)).width(Length::from(100)))
+            .align_items(Align::End);
 
         let io = Column::new()
             .spacing(20)
             .max_width(400)
-            .push(input)
+            .push(pc_info)
+            .push(rega_info)
+            .push(regb_info)
+            .push(carry_info)
+            .push(output_info)
+            .push(input_info)
             .push(slider)
             .push(controls)
+            .push(reset)
             .align_items(Align::Center);
 
         let rom = self.rom_state.create_layout(&self.cpu.prg);
+        let pc = self.cpu.reg.pc;
         let rom_control =
             rom.into_iter()
                 .enumerate()
@@ -173,7 +216,19 @@ impl Application for TD4 {
                         Row::new()
                             .spacing(10)
                             .push(Text::new(format!("{}:", i)))
-                            .push(btn),
+                            .push(btn)
+                            .push(
+                                Container::new(circle::Circle::new(
+                                    10.0,
+                                    if pc == i as u8 {
+                                        Color::from_rgb(1.0, 0.0, 0.0)
+                                    } else {
+                                        Color::BLACK
+                                    },
+                                ))
+                                .center_x()
+                                .center_y(),
+                            ),
                     )
                     .align_items(Align::End)
                 });
@@ -190,5 +245,36 @@ impl Application for TD4 {
             .center_x()
             .center_y()
             .into()
+    }
+}
+
+pub fn led4bit(halfbyte: &u8) -> Row<Message> {
+    (0..4)
+        .into_iter()
+        .rev()
+        .fold(Row::new().spacing(1), |row, i| {
+            row.push(circle::Circle::new(
+                10.0,
+                bit2color(&((halfbyte & (0x01 << i)) != 0)),
+            ))
+        })
+}
+
+pub fn reg_info(reg: &u8, text: String) -> Row<Message> {
+    let led = led4bit(reg);
+    let info = Row::new()
+        .spacing(20)
+        .push(Text::new(&text).width(Length::from(200)))
+        .push(led)
+        .push(Text::new(format!("0x{:1X}", reg)).width(Length::from(100)))
+        .align_items(Align::End);
+    info
+}
+
+fn bit2color(bit: &bool) -> Color {
+    if *bit {
+        Color::from_rgb(1.0, 0.0, 0.0)
+    } else {
+        Color::BLACK
     }
 }
